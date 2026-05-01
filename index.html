@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>טאבו אונליין 🤫</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366f1',
+                        secondary: '#ec4899',
+                        dark: '#0f172a',
+                        card: '#1e293b'
+                    },
+                    animation: {
+                        'bounce-short': 'bounce 1s ease-in-out 3',
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+        .hide { display: none !important; }
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-card border-b border-slate-700 p-4 shadow-md z-10">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                <i class="fas fa-comment-slash mr-2"></i> טאבו אונליין
+            </h1>
+            <div id="userInfo" class="text-sm text-slate-400 hide">
+                שחקן: <span id="displayUserName" class="text-white font-bold"></span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 overflow-y-auto p-4 flex items-center justify-center bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PHBhdGggZD0iTTAgMGg0MHY0MEgwem0yMCAyMGMxMS4wNDYgMCAyMC04Ljk1NCAyMC0yMFMyOC45NTQgMCAyMCAwIDAgOC45NTQgMCAyMHM4Ljk1NCAyMCAyMCAyMHptMCAyQzguOTU0IDQyIDAgMzMuMDQ2IDAgMjJTMi45NTQgMiAxNCAyczIyIDguOTU0IDIyIDIwLTguOTU0IDIwLTIwIDIweiIgZmlsbD0iIzFZTDI5M0IiIGZpbGwtb3BhY2l0eT0iMC40IiBmaWxsLXJ1bGU9ImV2ZW5vZGQiLz48L3N2Zz4=')]">
+        
+        <!-- Screen 1: Login -->
+        <div id="screen-login" class="bg-card p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
+            <h2 class="text-2xl font-bold mb-6 text-center">ברוכים הבאים 👋</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-slate-300">איך קוראים לך?</label>
+                    <input type="text" id="playerName" placeholder="הזן שם שחקן..." class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-primary transition" maxlength="15">
+                </div>
+                
+                <div class="pt-4 border-t border-slate-700 space-y-3">
+                    <button onclick="createRoom()" class="w-full bg-primary hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg transition shadow-lg flex justify-center items-center gap-2">
+                        <i class="fas fa-plus-circle"></i> צור חדר חדש
+                    </button>
+                    
+                    <div class="relative flex py-2 items-center">
+                        <div class="flex-grow border-t border-slate-600"></div>
+                        <span class="flex-shrink-0 mx-4 text-slate-400 text-sm">או</span>
+                        <div class="flex-grow border-t border-slate-600"></div>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <input type="text" id="joinPin" placeholder="קוד חדר (4 ספרות)" class="w-2/3 bg-slate-800 border border-slate-600 rounded-lg p-3 text-center text-white text-xl tracking-widest focus:outline-none focus:border-secondary transition" maxlength="4">
+                        <button onclick="joinRoom()" class="w-1/3 bg-secondary hover:bg-pink-400 text-white font-bold py-3 px-2 rounded-lg transition shadow-lg">
+                            הצטרף
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 2: Lobby -->
+        <div id="screen-lobby" class="bg-card p-6 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-700 hide flex flex-col h-[80vh] max-h-[600px]">
+            <div class="text-center mb-6">
+                <h2 class="text-3xl font-bold text-white mb-2">קוד החדר: <span id="lobbyPinDisplay" class="text-primary tracking-widest">---</span></h2>
+                <p class="text-slate-400 text-sm">שתף את הקוד הזה עם חברים כדי שיצטרפו!</p>
+            </div>
+
+            <div class="flex-1 overflow-y-auto mb-4 bg-slate-800 rounded-lg p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3 border-b border-slate-700 pb-2">שחקנים מחוברים (<span id="playerCount">0</span>/30)</h3>
+                <ul id="playersList" class="space-y-2">
+                    <!-- Player items will be injected here -->
+                </ul>
+            </div>
+
+            <div class="mb-4 bg-slate-800 p-3 rounded-lg border border-slate-700">
+                <h4 class="text-sm font-bold text-slate-300 mb-2"><i class="fas fa-plus"></i> הוסף מילים למאגר (אופציונלי)</h4>
+                <div class="flex gap-2">
+                    <input type="text" id="customWordInput" placeholder="מילה ראשית" class="w-1/3 bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                    <input type="text" id="customTabooInput" placeholder="מילים אסורות (מופרדות בפסיק)" class="w-2/3 bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                </div>
+                <button onclick="addCustomWord()" class="mt-2 w-full bg-slate-700 hover:bg-slate-600 text-white text-sm py-1 rounded transition">הוסף מילה</button>
+            </div>
+
+            <div id="hostControls" class="hide mt-auto">
+                <button onclick="startGame()" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-4 px-4 rounded-xl transition shadow-lg text-xl animate-pulse-fast">
+                    <i class="fas fa-play mr-2"></i> התחל משחק!
+                </button>
+            </div>
+            <div id="waitingMessage" class="text-center text-slate-400 font-medium pb-2">
+                <i class="fas fa-spinner fa-spin mr-2"></i> ממתין למנהל החדר שיתחיל...
+            </div>
+        </div>
+
+        <!-- Screen 3: Game -->
+        <div id="screen-game" class="w-full max-w-4xl h-full flex flex-col hide relative">
+            
+            <!-- Top Status Bar -->
+            <div class="bg-card border border-slate-700 rounded-xl p-4 mb-4 flex justify-between items-center shadow-lg">
+                <div class="flex flex-col items-center">
+                    <span class="text-xs text-slate-400">זמן נותר</span>
+                    <div id="timerDisplay" class="text-3xl font-bold text-emerald-400">60</div>
+                </div>
+                
+                <div class="text-center flex-1 mx-4">
+                    <div class="text-sm text-slate-400">תור של</div>
+                    <div id="activePlayerName" class="text-xl font-bold text-primary">---</div>
+                </div>
+
+                <div class="flex flex-col items-center cursor-pointer relative group" onclick="toggleScoreboard()">
+                    <span class="text-xs text-slate-400">הניקוד שלי</span>
+                    <div id="myScoreDisplay" class="text-2xl font-bold text-secondary">0</div>
+                    <!-- Hover Scoreboard -->
+                    <div id="scoreboardDrop" class="absolute top-full left-0 mt-2 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-3 hide z-50">
+                        <h4 class="text-xs font-bold text-slate-400 mb-2 border-b border-slate-600 pb-1">טבלת ניקוד</h4>
+                        <ul id="scoreList" class="space-y-1 text-sm"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Game Area: Split view for Desktop, stacked for mobile -->
+            <div class="flex flex-col md:flex-row gap-4 flex-1 overflow-hidden min-h-[400px]">
+                
+                <!-- Word Card Area (Dynamic based on role) -->
+                <div class="w-full md:w-1/3 bg-card border border-slate-700 rounded-xl p-6 flex flex-col justify-center items-center shadow-lg text-center relative">
+                    
+                    <!-- View for Explainer -->
+                    <div id="explainerView" class="w-full hide">
+                        <h3 class="text-sm text-slate-400 mb-1 uppercase tracking-wider">המילה שלך:</h3>
+                        <div id="mainWordDisplay" class="text-4xl font-bold text-white mb-6 pb-4 border-b border-slate-700 bg-slate-800/50 rounded-lg p-4 shadow-inner">---</div>
+                        
+                        <h3 class="text-sm text-red-400 mb-3 font-bold"><i class="fas fa-ban"></i> מילים אסורות (טאבו!):</h3>
+                        <ul id="tabooWordsList" class="space-y-2">
+                            <!-- Taboo words injected here -->
+                        </ul>
+                    </div>
+
+                    <!-- View for Guesser -->
+                    <div id="guesserView" class="w-full">
+                        <div class="animate-pulse flex flex-col items-center justify-center h-full">
+                            <i class="fas fa-eye-slash text-6xl text-slate-600 mb-4"></i>
+                            <h3 class="text-xl font-bold text-slate-300">הקשב לרמזים!</h3>
+                            <p class="text-slate-500 text-sm mt-2">נסה לנחש את המילה ש-<span class="text-primary font-bold explainer-name-placeholder"></span> מנסה להסביר.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat & Input Area -->
+                <div class="w-full md:w-2/3 flex flex-col bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden">
+                    
+                    <!-- Chat Messages -->
+                    <div id="chatMessages" class="flex-1 p-4 overflow-y-auto chat-scroll space-y-3 flex flex-col-reverse">
+                        <!-- Messages injected here -->
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="bg-slate-900 p-4 border-t border-slate-700">
+                        <form id="chatForm" onsubmit="handleChatSubmit(event)" class="flex gap-2">
+                            <input type="text" id="chatInput" placeholder="כתוב כאן..." class="flex-1 bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-primary transition" autocomplete="off">
+                            <button type="submit" id="sendBtn" class="bg-primary hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                        
+                        <!-- Report Button (Visible to everyone except explainer) -->
+                        <div id="reportContainer" class="mt-3 text-center hide">
+                            <button onclick="reportCheat()" class="text-xs text-red-400 hover:text-red-300 transition bg-red-900/20 px-3 py-1 rounded-full border border-red-900/50">
+                                <i class="fas fa-bullhorn"></i> דווח: נאמרה מילה אסורה בקול!
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-slate-800 border border-slate-600 text-white px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 opacity-0 translate-y-[-20px] pointer-events-none z-50 flex items-center gap-3">
+        <i id="toastIcon" class="fas fa-info-circle"></i>
+        <span id="toastMsg"></span>
+    </div>
+
+    <!-- Audio Elements for Sound Effects -->
+    <script>
+        // Inline sound generation using Web Audio API to avoid external assets
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            if (type === 'success') {
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                oscillator.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); // E5
+                gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.5);
+            } else if (type === 'error') {
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(150, audioCtx.currentTime); 
+                gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.3);
+            }
+        }
+    </script>
+
+    <script>
+        // --- 1. FIREBASE SETUP & RULES COMPLIANCE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyATvvE-2BijqyKBGaxBUlvjRR4AT-JFFmQ",
+            authDomain: "aliasgame-32d02.firebaseapp.com",
+            databaseURL: "https://aliasgame-32d02-default-rtdb.firebaseio.com",
+            projectId: "aliasgame-32d02",
+            storageBucket: "aliasgame-32d02.firebasestorage.app",
+            messagingSenderId: "695023741700",
+            appId: "1:695023741700:web:e059f7dcd413740c80fe51",
+            measurementId: "G-3X3PCE6KWW"
+        };
+        const appId = 'taboo-app';
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Global State Variables
+        let currentUser = null;
+        let userName = "";
+        let currentRoomId = null;
+        let roomData = null;
+        let unsubscribeRoom = null;
+        let timerInterval = null;
+        let myRole = 'guesser'; // 'explainer' | 'guesser'
+
+        // Default Game Dictionary
+        const defaultWords = [
+            { word: "שמש", taboo: ["אור", "חם", "כוכב", "צהוב", "קיץ"] },
+            { word: "כלב", taboo: ["חיה", "נבח", "חתול", "עצם", "חבר"] },
+            { word: "ים", taboo: ["מים", "חול", "גלים", "כחול", "מלח", "חוף"] },
+            { word: "פיצה", taboo: ["אוכל", "איטליה", "משולש", "גבינה", "בצק"] },
+            { word: "כדורגל", taboo: ["ספורט", "שער", "מגרש", "מסי", "לבעוט"] },
+            { word: "טלפון", taboo: ["לדבר", "מסך", "אייפון", "להתקשר", "נייד"] },
+            { word: "מיטה", taboo: ["לישון", "שמיכה", "כרית", "חדר", "לילה"] },
+            { word: "מטוס", taboo: ["לטוס", "שמיים", "שדה תעופה", "כנפיים", "חופשה"] },
+            { word: "מחשב", taboo: ["מקלדת", "עכבר", "מסך", "אינטרנט", "לעבוד"] },
+            { word: "שוקולד", taboo: ["מתוק", "קקאו", "חום", "ממתק", "טעים"] }
+        ];
+
+        // --- 2. AUTHENTICATION (Rule 3) ---
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await auth.signInWithCustomToken(__initial_auth_token);
+                } else {
+                    await auth.signInAnonymously();
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+                showToast("שגיאת התחברות", "error");
+            }
+        }
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUser = user;
+                console.log("Logged in as:", user.uid);
+            }
+        });
+
+        // Run Auth on load
+        initAuth();
+
+        // --- 3. UI HELPER FUNCTIONS ---
+        function showScreen(screenId) {
+            document.getElementById('screen-login').classList.add('hide');
+            document.getElementById('screen-lobby').classList.add('hide');
+            document.getElementById('screen-game').classList.add('hide');
+            document.getElementById(screenId).classList.remove('hide');
+        }
+
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            document.getElementById('toastMsg').innerText = msg;
+            
+            toast.className = `fixed top-5 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 z-50 flex items-center gap-3`;
+            
+            if(type === 'error') {
+                toast.classList.add('bg-red-900', 'border-red-600', 'text-white');
+                icon.className = 'fas fa-exclamation-triangle text-red-400';
+            } else if (type === 'success') {
+                toast.classList.add('bg-green-900', 'border-green-600', 'text-white');
+                icon.className = 'fas fa-check-circle text-green-400';
+            } else {
+                toast.classList.add('bg-slate-800', 'border-slate-600', 'text-white');
+                icon.className = 'fas fa-info-circle text-primary';
+            }
+
+            toast.classList.remove('opacity-0', 'translate-y-[-20px]');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-20px]');
+            }, 3000);
+        }
+
+        function toggleScoreboard() {
+            document.getElementById('scoreboardDrop').classList.toggle('hide');
+        }
+
+        // --- 4. GAME LOGIC & FIRESTORE ---
+
+        // Get absolute Firestore path reference (Rule 1 & 2)
+        function getRoomsCollection() {
+            return db.collection('artifacts').doc(appId).collection('public').doc('data').collection('rooms');
+        }
+
+        async function createRoom() {
+            const nameInput = document.getElementById('playerName').value.trim();
+            if(!nameInput) return showToast("אנא הזן שם", "error");
+            if(!currentUser) return showToast("עדיין מתחבר למערכת...", "error");
+
+            userName = nameInput;
+            const pin = Math.floor(1000 + Math.random() * 9000).toString(); // 4 digits
+            
+            const initialRoomData = {
+                id: pin,
+                hostId: currentUser.uid,
+                status: 'lobby', // lobby, playing
+                players: {
+                    [currentUser.uid]: { name: userName, score: 0, isHost: true }
+                },
+                activePlayerId: null,
+                currentWord: null,
+                turnEndTime: null,
+                messages: [],
+                wordsPool: [...defaultWords],
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            try {
+                await getRoomsCollection().doc(pin).set(initialRoomData);
+                currentRoomId = pin;
+                setupRoomListener(pin);
+                updateUserInfo();
+                showScreen('screen-lobby');
+                showToast(`חדר ${pin} נוצר בהצלחה!`, "success");
+            } catch (error) {
+                console.error("Error creating room:", error);
+                showToast("שגיאה ביצירת חדר", "error");
+            }
+        }
+
+        async function joinRoom() {
+            const nameInput = document.getElementById('playerName').value.trim();
+            const pinInput = document.getElementById('joinPin').value.trim();
+            
+            if(!nameInput) return showToast("אנא הזן שם", "error");
+            if(!pinInput || pinInput.length !== 4) return showToast("קוד חדר לא תקין", "error");
+            if(!currentUser) return showToast("ממתין לחיבור...", "error");
+
+            userName = nameInput;
+            const roomRef = getRoomsCollection().doc(pinInput);
+
+            try {
+                const doc = await roomRef.get();
+                if (!doc.exists) {
+                    return showToast("חדר לא קיים!", "error");
+                }
+                
+                // Add user to players object
+                await roomRef.update({
+                    [`players.${currentUser.uid}`]: { name: userName, score: 0, isHost: false }
+                });
+
+                currentRoomId = pinInput;
+                setupRoomListener(pinInput);
+                updateUserInfo();
+                showScreen('screen-lobby');
+            } catch (error) {
+                console.error("Error joining room:", error);
+                showToast("שגיאה בהצטרפות", "error");
+            }
+        }
+
+        function updateUserInfo() {
+            document.getElementById('userInfo').classList.remove('hide');
+            document.getElementById('displayUserName').innerText = userName;
+        }
+
+        // Listen to Room Changes (The Core Syncer)
+        function setupRoomListener(pin) {
+            if(unsubscribeRoom) unsubscribeRoom();
+            
+            const roomRef = getRoomsCollection().doc(pin);
+            
+            unsubscribeRoom = roomRef.onSnapshot((doc) => {
+                if(!doc.exists) {
+                    showToast("החדר נסגר", "error");
+                    resetApp();
+                    return;
+                }
+
+                const data = doc.data();
+                const previousStatus = roomData?.status;
+                const previousActive = roomData?.activePlayerId;
+                const previousTurnEnd = roomData?.turnEndTime;
+                
+                roomData = data;
+                
+                // Route UI based on status
+                if(data.status === 'lobby') {
+                    renderLobby(data);
+                } else if (data.status === 'playing') {
+                    if (previousStatus === 'lobby') showScreen('screen-game');
+                    renderGame(data);
+                    
+                    // Handle Timer Reset
+                    if (data.turnEndTime !== previousTurnEnd) {
+                        startLocalTimer(data.turnEndTime);
+                    }
+                }
+
+            }, (error) => {
+                console.error("Listener error:", error);
+                // Require error callback (Rule 3 add-on)
+            });
+        }
+
+        // --- RENDER LOBBY ---
+        function renderLobby(data) {
+            document.getElementById('lobbyPinDisplay').innerText = data.id;
+            
+            const players = data.players || {};
+            const playerIds = Object.keys(players);
+            document.getElementById('playerCount').innerText = playerIds.length;
+            
+            const listEl = document.getElementById('playersList');
+            listEl.innerHTML = '';
+            
+            playerIds.forEach(uid => {
+                const p = players[uid];
+                const li = document.createElement('li');
+                li.className = "flex items-center gap-3 p-2 rounded bg-slate-700/50";
+                li.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold">
+                        ${p.name.charAt(0)}
+                    </div>
+                    <span class="text-white">${p.name} ${uid === currentUser.uid ? '(את/ה)' : ''}</span>
+                    ${p.isHost ? '<i class="fas fa-crown text-yellow-400 ml-auto" title="מנהל החדר"></i>' : ''}
+                `;
+                listEl.appendChild(li);
+            });
+
+            // Controls visibility
+            const isHost = players[currentUser.uid]?.isHost;
+            if(isHost) {
+                document.getElementById('hostControls').classList.remove('hide');
+                document.getElementById('waitingMessage').classList.add('hide');
+            } else {
+                document.getElementById('hostControls').classList.add('hide');
+                document.getElementById('waitingMessage').classList.remove('hide');
+            }
+        }
+
+        async function addCustomWord() {
+            const wordVal = document.getElementById('customWordInput').value.trim();
+            const tabooVal = document.getElementById('customTabooInput').value.trim();
+            
+            if(!wordVal || !tabooVal) return showToast("מלא את שני השדות", "error");
+            
+            const tabooArr = tabooVal.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            if(tabooArr.length < 3) return showToast("הכנס לפחות 3 מילות טאבו", "error");
+
+            const newWordObj = { word: wordVal, taboo: tabooArr };
+            
+            try {
+                const roomRef = getRoomsCollection().doc(currentRoomId);
+                // ArrayUnion is simple enough and allowed
+                await roomRef.update({
+                    wordsPool: firebase.firestore.FieldValue.arrayUnion(newWordObj)
+                });
+                
+                document.getElementById('customWordInput').value = '';
+                document.getElementById('customTabooInput').value = '';
+                showToast("מילה נוספה למאגר!", "success");
+            } catch (err) {
+                console.error(err);
+                showToast("שגיאה בהוספת מילה", "error");
+            }
+        }
+
+        // --- RENDER GAME ---
+        async function startGame() {
+            if(!roomData || !roomData.players[currentUser.uid]?.isHost) return;
+            
+            // Pick random first player and word
+            const playerIds = Object.keys(roomData.players);
+            const firstPlayerId = playerIds[Math.floor(Math.random() * playerIds.length)];
+            const randomWord = roomData.wordsPool[Math.floor(Math.random() * roomData.wordsPool.length)];
+            
+            const turnEnd = Date.now() + (60 * 1000); // 60 seconds from now
+
+            try {
+                await getRoomsCollection().doc(currentRoomId).update({
+                    status: 'playing',
+                    activePlayerId: firstPlayerId,
+                    currentWord: randomWord,
+                    turnEndTime: turnEnd,
+                    messages: [{
+                        type: 'system',
+                        text: `המשחק התחיל! תור ${roomData.players[firstPlayerId].name} להסביר.`,
+                        timestamp: Date.now()
+                    }]
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function renderGame(data) {
+            const players = data.players || {};
+            const myData = players[currentUser.uid];
+            const activePlayer = players[data.activePlayerId];
+            
+            if(!activePlayer || !myData) return;
+
+            myRole = (data.activePlayerId === currentUser.uid) ? 'explainer' : 'guesser';
+
+            // Top Bar Info
+            document.getElementById('activePlayerName').innerText = activePlayer.name;
+            document.getElementById('myScoreDisplay').innerText = myData.score || 0;
+            
+            // Scoreboard Dropdown
+            const scoreList = document.getElementById('scoreList');
+            scoreList.innerHTML = '';
+            Object.values(players)
+                .sort((a,b) => (b.score||0) - (a.score||0))
+                .forEach(p => {
+                    scoreList.innerHTML += `<li class="flex justify-between"><span>${p.name}</span><span class="font-bold text-emerald-400">${p.score||0}</span></li>`;
+                });
+
+            // Role-based UI
+            const explainerView = document.getElementById('explainerView');
+            const guesserView = document.getElementById('guesserView');
+            const reportContainer = document.getElementById('reportContainer');
+            const chatInput = document.getElementById('chatInput');
+
+            // Fill placeholders
+            document.querySelectorAll('.explainer-name-placeholder').forEach(el => el.innerText = activePlayer.name);
+
+            if (myRole === 'explainer') {
+                explainerView.classList.remove('hide');
+                guesserView.classList.add('hide');
+                reportContainer.classList.add('hide');
+                chatInput.placeholder = "שלח רמז לצ'אט...";
+                
+                // ONLY Explainer sees the word object!
+                if(data.currentWord) {
+                    document.getElementById('mainWordDisplay').innerText = data.currentWord.word;
+                    const tabooUl = document.getElementById('tabooWordsList');
+                    tabooUl.innerHTML = '';
+                    data.currentWord.taboo.forEach(tw => {
+                        tabooUl.innerHTML += `<li class="bg-red-900/40 border border-red-800 text-red-200 py-2 px-4 rounded font-medium">${tw}</li>`;
+                    });
+                }
+            } else {
+                explainerView.classList.add('hide');
+                guesserView.classList.remove('hide');
+                reportContainer.classList.remove('hide');
+                chatInput.placeholder = "נחש את המילה...";
+            }
+
+            // Render Messages
+            renderMessages(data.messages || []);
+        }
+
+        function renderMessages(messages) {
+            const container = document.getElementById('chatMessages');
+            container.innerHTML = '';
+            
+            // messages are stored chronologically. We flex-col-reverse so bottom is newest.
+            // Loop from newest to oldest
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const msg = messages[i];
+                const div = document.createElement('div');
+                div.className = "p-2 rounded-lg text-sm max-w-[85%] break-words shadow ";
+                
+                if (msg.type === 'system') {
+                    div.className += "bg-slate-700/50 text-slate-300 mx-auto text-center border border-slate-600 my-2";
+                    div.innerHTML = `<i class="fas fa-info-circle mr-1"></i> ${msg.text}`;
+                } else if (msg.type === 'correct') {
+                    div.className += "bg-emerald-900/60 text-emerald-300 mx-auto text-center border border-emerald-600 font-bold my-2 text-base w-full";
+                    div.innerHTML = `<i class="fas fa-star text-yellow-400 animate-pulse"></i> ${msg.text} <i class="fas fa-star text-yellow-400 animate-pulse"></i>`;
+                } else if (msg.type === 'error_system') {
+                    div.className += "bg-red-900/60 text-red-300 mx-auto text-center border border-red-600 font-bold my-2 w-full";
+                    div.innerHTML = `<i class="fas fa-siren-on mr-1"></i> ${msg.text}`;
+                } else {
+                    // Regular message
+                    const isMe = msg.senderId === currentUser.uid;
+                    const isExplainer = msg.senderId === roomData.activePlayerId;
+                    
+                    div.classList.add(isMe ? 'bg-primary/20' : 'bg-slate-700');
+                    div.classList.add(isMe ? 'border-primary/30' : 'border-slate-600');
+                    div.classList.add('border');
+                    if (isMe) div.classList.add('mr-auto'); // align left for RTL (so it's on the right visually)
+                    if (!isMe) div.classList.add('ml-auto');
+                    
+                    let icon = isExplainer ? '<i class="fas fa-bullhorn text-secondary ml-1" title="רמז"></i>' : '';
+                    
+                    div.innerHTML = `<div class="text-xs text-slate-400 font-bold mb-1">${icon} ${msg.senderName}</div><div>${msg.text}</div>`;
+                }
+                
+                container.appendChild(div);
+            }
+        }
+
+        // --- TIMER LOGIC ---
+        function startLocalTimer(endTime) {
+            if(timerInterval) clearInterval(timerInterval);
+            const display = document.getElementById('timerDisplay');
+            
+            timerInterval = setInterval(() => {
+                const now = Date.now();
+                const timeLeft = Math.max(0, Math.ceil((endTime - now) / 1000));
+                
+                display.innerText = timeLeft;
+                
+                if (timeLeft <= 10) display.classList.replace('text-emerald-400', 'text-red-500');
+                else display.className = 'text-3xl font-bold text-emerald-400';
+
+                if(timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    // Only Host processes timeout to avoid DB race conditions
+                    if(roomData.players[currentUser.uid].isHost) {
+                        handleTurnTimeout();
+                    }
+                }
+            }, 500);
+        }
+
+        async function handleTurnTimeout() {
+            if(!roomData) return;
+            const newMsg = {
+                type: 'system',
+                text: `נגמר הזמן! המילה הייתה "${roomData.currentWord.word}". מעביר תור...`,
+                timestamp: Date.now()
+            };
+            playSound('error');
+            await triggerNextTurn(newMsg);
+        }
+
+        // --- GAME ACTIONS ---
+        function cleanString(str) {
+            return str.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").replace(/\s{2,}/g," ").trim().toLowerCase();
+        }
+
+        async function handleChatSubmit(e) {
+            e.preventDefault();
+            if(!roomData || !currentUser) return;
+            
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if(!text) return;
+            input.value = '';
+
+            const currentWordObj = roomData.currentWord;
+            const cleanText = cleanString(text);
+            const cleanTarget = cleanString(currentWordObj.word);
+
+            // Validation Logic based on Role
+            if (myRole === 'explainer') {
+                // Check if explainer typed taboo or main word
+                if (cleanText.includes(cleanTarget)) {
+                    showToast("אסור לכתוב את המילה הראשית!", "error");
+                    return;
+                }
+                let usedTaboo = false;
+                for(let t of currentWordObj.taboo) {
+                    if(cleanText.includes(cleanString(t))) {
+                        usedTaboo = t;
+                        break;
+                    }
+                }
+                if(usedTaboo) {
+                    playSound('error');
+                    showToast(`השתמשת במילת טאבו: ${usedTaboo}!`, "error");
+                    // Penalty!
+                    await sendMessageToDB({
+                        type: 'error_system',
+                        text: `🚨 ${userName} כתב מילת טאבו בטעות! קנס 5 נקודות.`,
+                        timestamp: Date.now()
+                    });
+                    updateScore(currentUser.uid, -5);
+                    return;
+                }
+            } else {
+                // Guesser logic
+                if (cleanText === cleanTarget) {
+                    // CORRECT GUESS!
+                    playSound('success');
+                    
+                    const successMsg = {
+                        type: 'correct',
+                        text: `🎉 ${userName} ניחש את המילה "${currentWordObj.word}"! 🎉`,
+                        timestamp: Date.now()
+                    };
+                    
+                    // Update scores locally for payload
+                    const updates = {};
+                    const currentMyScore = roomData.players[currentUser.uid].score || 0;
+                    const currentExplainerScore = roomData.players[roomData.activePlayerId].score || 0;
+                    
+                    updates[`players.${currentUser.uid}.score`] = currentMyScore + 10;
+                    updates[`players.${roomData.activePlayerId}.score`] = currentExplainerScore + 5;
+                    
+                    // Push scores and trigger next turn immediately
+                    const roomRef = getRoomsCollection().doc(currentRoomId);
+                    await roomRef.update(updates);
+                    
+                    // Only the guesser who won triggers the next turn to avoid multiple triggers
+                    await triggerNextTurn(successMsg);
+                    return;
+                }
+            }
+
+            // Regular message push
+            await sendMessageToDB({
+                senderId: currentUser.uid,
+                senderName: userName,
+                text: text,
+                type: myRole === 'explainer' ? 'hint' : 'guess',
+                timestamp: Date.now()
+            });
+        }
+
+        async function sendMessageToDB(msgObj) {
+            try {
+                const roomRef = getRoomsCollection().doc(currentRoomId);
+                // Keep only last 40 messages to prevent document size limit
+                const currentMessages = roomData.messages || [];
+                const newMessages = [msgObj, ...currentMessages].slice(0, 40);
+                await roomRef.update({ messages: newMessages });
+            } catch (err) {
+                console.error("Error sending msg", err);
+            }
+        }
+
+        async function updateScore(uid, amount) {
+             try {
+                const roomRef = getRoomsCollection().doc(currentRoomId);
+                const currentScore = roomData.players[uid].score || 0;
+                await roomRef.update({
+                    [`players.${uid}.score`]: currentScore + amount
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function reportCheat() {
+            if(!roomData || myRole === 'explainer') return;
+            playSound('error');
+            await sendMessageToDB({
+                type: 'error_system',
+                text: `🛑 ${userName} דיווח שהמסביר אמר מילה אסורה! קנס 5 נקודות.`,
+                timestamp: Date.now()
+            });
+            updateScore(roomData.activePlayerId, -5);
+        }
+
+        async function triggerNextTurn(extraMessageObj = null) {
+            const playerIds = Object.keys(roomData.players);
+            const currentIndex = playerIds.indexOf(roomData.activePlayerId);
+            const nextIndex = (currentIndex + 1) % playerIds.length;
+            const nextPlayerId = playerIds[nextIndex];
+            
+            // Pick new random word
+            const randomWord = roomData.wordsPool[Math.floor(Math.random() * roomData.wordsPool.length)];
+            const turnEnd = Date.now() + (60 * 1000);
+
+            let newMessages = roomData.messages || [];
+            if (extraMessageObj) newMessages.unshift(extraMessageObj);
+            
+            newMessages.unshift({
+                type: 'system',
+                text: `תור חדש מתחיל! עכשיו תור ${roomData.players[nextPlayerId].name} להסביר.`,
+                timestamp: Date.now()
+            });
+            
+            newMessages = newMessages.slice(0, 40);
+
+            try {
+                await getRoomsCollection().doc(currentRoomId).update({
+                    activePlayerId: nextPlayerId,
+                    currentWord: randomWord,
+                    turnEndTime: turnEnd,
+                    messages: newMessages
+                });
+            } catch (err) {
+                console.error("Error ending turn", err);
+            }
+        }
+
+        function resetApp() {
+            if(unsubscribeRoom) unsubscribeRoom();
+            currentRoomId = null;
+            roomData = null;
+            if(timerInterval) clearInterval(timerInterval);
+            showScreen('screen-login');
+        }
+
+    </script>
+</body>
+</html>
